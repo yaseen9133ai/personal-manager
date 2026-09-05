@@ -2,7 +2,7 @@
 
 Part 1: Plan
 
-Enrich this document to plan out each of these parts in detail, with substeps listed out as a checklist to be checked off by the agent, and with tests and success critieria for each. Also create an AGENTS.md file inside the frontend directory that describes the existing code there. Ensure the user checks and approves the plan.
+Enrich this document to plan out each of these parts in detail, with substeps listed out as a checklist to be checked off by the agent, and with tests and success critieria for each. Also create an CLAUDE.md file inside the frontend directory that describes the existing code there. Ensure the user checks and approves the plan.
 
 Part 2: Scaffolding
 
@@ -30,7 +30,7 @@ Now have the frontend actually use the backend API, so that the app is a proper 
 
 Part 8: AI connectivity
 
-Now allow the backend to make an AI call via OpenRouter. Test connectivity with a simple "2+2" test and ensure the AI call is working.
+Now allow the backend to make an AI call via Groq. Test connectivity with a simple "2+2" test and ensure the AI call is working.
 
 Part 9: Now extend the backend call so that it always calls the AI with the JSON of the Kanban board, plus the user's question (and conversation history). The AI should respond with Structured Outputs that includes the response to the user and optionaly an update to the Kanban. Test thoroughly.
 
