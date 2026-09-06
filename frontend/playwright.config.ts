@@ -11,10 +11,13 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: "npm run dev -- --hostname 127.0.0.1 --port 3000",
+    // Boots the real backend serving the real static export, since the
+    // board now sits behind a login gate the frontend alone can't satisfy.
+    command: "npm run build && node scripts/e2e-server.mjs",
     url: "http://127.0.0.1:3000",
     reuseExistingServer: true,
     timeout: 120_000,
+    env: { E2E_PORT: "3000" },
   },
   projects: [
     {
