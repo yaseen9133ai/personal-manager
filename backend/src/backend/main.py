@@ -24,6 +24,7 @@ from backend.board import (
     rename_column,
     update_card,
 )
+from backend.chat import ChatRequest, ChatResponse, handle_chat
 from backend.db import get_connection, get_user_id
 
 app = FastAPI(title="Personal Manager backend")
@@ -135,6 +136,13 @@ def delete_card_route(
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return Response(status_code=204)
+
+
+@app.post("/api/chat", response_model=ChatResponse)
+def chat_route(
+    payload: ChatRequest, user_id: int = Depends(get_current_user_id)
+) -> ChatResponse:
+    return handle_chat(get_connection(), user_id, payload)
 
 
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

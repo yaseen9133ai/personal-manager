@@ -41,9 +41,11 @@ assumed approved.
 
 ## Risks / things to verify early
 
-- Confirm Groq's `openai/gpt-oss-120b` supports structured JSON outputs
-  (JSON schema `response_format` or tool-calling) — verify in Part 8 before
-  Part 9's schema design depends on it.
+- ~~Confirm Groq's `openai/gpt-oss-120b` supports structured JSON outputs~~
+  **Resolved in Part 8**: `response_format: {"type": "json_schema", ...,
+  "strict": true}` works correctly on this model, verified with real API
+  calls, including a nullable field via `anyOf` (the shape Part 9 needs for
+  an optional `board_update`). See `backend/CLAUDE.md`'s AI section.
 - `.env` at repo root holds `GROQ_API_KEY` — already gitignored; the Docker
   setup must load it (e.g. `--env-file .env` in the start script) rather than
   baking it into the image.
@@ -210,12 +212,12 @@ not an in-memory demo.
 
 ## Part 8: AI connectivity
 
-- [ ] Add Groq client setup in the backend, reading `GROQ_API_KEY` from the
+- [x] Add Groq client setup in the backend, reading `GROQ_API_KEY` from the
       environment (via `.env`, loaded into the container).
-- [ ] Add a minimal internal check (e.g. a small script or a temporary test)
+- [x] Add a minimal internal check (e.g. a small script or a temporary test)
       that sends a "what is 2+2" prompt to `openai/gpt-oss-120b` via Groq and
       confirms a sane response comes back.
-- [ ] Confirm and document what structured-output mechanism this model
+- [x] Confirm and document what structured-output mechanism this model
       supports on Groq (JSON schema `response_format` vs. tool calling) —
       resolves the open risk noted above, before Part 9 designs the schema
       around it.
@@ -232,17 +234,17 @@ mechanism to use in Part 9 is confirmed.
 
 ## Part 9: AI chat with structured Kanban updates
 
-- [ ] Design the structured output schema: `{ reply: string, board_update:
+- [x] Design the structured output schema: `{ reply: string, board_update:
       <optional partial board change> | null }`. Define exactly what shapes
       of update are allowed (rename column, add/edit/move/delete card(s)) —
       keep this to what's achievable in Part 6/7's API rather than a generic
       diff format.
-- [ ] Add `POST /api/chat` that: loads the current board JSON, appends the
+- [x] Add `POST /api/chat` that: loads the current board JSON, appends the
       user's message and prior conversation history, calls Groq with the
       structured-output schema, applies any returned board update via the
       existing Part 6 persistence logic, and returns the reply + updated
       board.
-- [ ] Store or pass conversation history (in-memory per session is acceptable
+- [x] Store or pass conversation history (in-memory per session is acceptable
       for MVP; note this as a limitation rather than adding a chat-history
       table unless needed).
 

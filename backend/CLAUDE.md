@@ -14,6 +14,8 @@ backend/
     auth.py        # session cookie signing/verification, hardcoded credentials
     db.py          # sqlite3 connection, schema creation, seeding (see docs/database.md)
     board.py       # board/column/card business logic + Pydantic request/response models
+    ai.py          # Groq client setup (see AI section below)
+    chat.py        # POST /api/chat: structured-output schema, prompt, action application
     static/         # in the repo: placeholder hello-world page, used for
                      # local `uv run uvicorn` dev. In the Docker image, the
                      # root Dockerfile's frontend-builder stage overwrites
@@ -23,6 +25,8 @@ backend/
     conftest.py     # `client` fixture: fresh temp SQLite DB + logged-in TestClient per test
     test_auth.py    # pytest + FastAPI TestClient
     test_board.py   # board/column/card routes, incl. cross-user isolation
+    test_ai.py      # live Groq connectivity check, skipped if GROQ_API_KEY unset
+    test_chat.py    # chat action application (mocked model) + one live test
 ```
 
 ## Running locally
@@ -58,6 +62,11 @@ uv run pytest
   within its (possibly new) column. Omitting both leaves position unchanged.
   404 if the card or target column don't exist for this user.
 - `DELETE /api/cards/{card_id}` -> `204`. 404 if not found for this user.
+- `POST /api/chat` -> body `{"message", "history"?}` (`history` is
+  `[{"role": "user"|"assistant", "content": "..."}]`, caller-supplied — see
+  AI section); returns `{"reply", "board"}` where `board` is the full,
+  current (possibly just-updated) board. Never errors on a bad/unhelpful
+  model response — see AI section for the fallback behavior.
 - `GET /` (and any other path not starting with `/api`) -> served from
   `src/backend/static/` via `StaticFiles(html=True)`.
 
@@ -108,6 +117,81 @@ didn't exist at all (never a 403, to avoid confirming existence).
 - `board.py`'s functions take a raw `sqlite3.Connection` and a `user_id` and
   do their own `commit()` — no separate transaction/session layer, matching
   the project's "keep it simple" standard at this scale.
+
+## AI (Groq)
+
+- `ai.get_client()` returns a lazily-created `groq.Groq()` client. The
+  official `groq` SDK auto-reads `GROQ_API_KEY` from the environment
+  (`Groq.__init__` falls back to `os.environ["GROQ_API_KEY"]` when no
+  `api_key` is passed) — no manual env plumbing needed.
+- `ai.py` calls `load_dotenv()` (from `python-dotenv`) pointed at the
+  repo-root `.env` on import, with `override=False`. This is purely a local
+  dev convenience for `uv run uvicorn` outside Docker — inside the container
+  `GROQ_API_KEY` is already set via `docker run --env-file .env`
+  (`scripts/start.*`), the repo-root `.env` file doesn't even exist in the
+  image (excluded in `.dockerignore`), and `load_dotenv()` on a missing path
+  is a harmless no-op either way.
+- `MODEL = "openai/gpt-oss-120b"` (root `CLAUDE.md`'s technical decision).
+- **Structured outputs are confirmed working** for this model on Groq:
+  `response_format={"type": "json_schema", "json_schema": {"name": ...,
+  "schema": ..., "strict": True}}` correctly enforces the schema, including
+  a nullable field via `"anyOf": [{"type": "null"}, {...}]` (the exact shape
+  Part 9 needs for an optional `board_update`). This was verified with real
+  API calls, not just docs — Groq's official docs claim support, but there
+  are open community-forum reports of `response_format` being ignored on
+  this model, so it was worth checking directly. Streaming and tool use are
+  not supported together with structured outputs (per Groq's docs) — not a
+  concern here since Part 9 doesn't need streaming.
+- `tests/test_ai.py` has a live connectivity test (real API call, "what is
+  2+2") skipped via `pytest.mark.skipif` when `GROQ_API_KEY` is unset, so the
+  suite still runs green in environments without the key.
+
+## AI chat (`chat.py`)
+
+- **Response shape**: `{reply: string, board_update: <action> | null}`. Only
+  ONE action per chat turn is supported (not a list) — the plan's own wording
+  described `board_update` as singular, and a single flat action shape keeps
+  the JSON schema Groq's strict mode enforces as simple as possible, which
+  matters given Part 8 found real model-specific structured-output quirks.
+  Multi-step requests need multiple chat turns for now; revisit if that
+  proves too limiting in practice.
+- **Action shape**: one flat object with `type` (enum of the 4 kinds below)
+  plus every possible field (`column_id`, `card_id`, `title`, `details`,
+  `target_column_id`), each nullable — required by strict mode (every key
+  must appear in `required`, even when the value can be `null`). Each action
+  type maps 1:1 onto an existing Part 6 `board.py` function:
+  - `rename_column`: `column_id` + `title`.
+  - `create_card`: `column_id` + `title` (+ optional `details`).
+  - `update_card`: `card_id` + any of `title`/`details`/`target_column_id`
+    (whichever are non-null are changed; matches `UpdateCardRequest`'s
+    existing "omitted = unchanged" semantics from Part 6).
+  - `delete_card`: `card_id`.
+- **Prompt**: `SYSTEM_PROMPT` plus a second system message containing the
+  current board as JSON (`build_messages` in `chat.py`) — sent fresh on
+  every request, not cached, so the model always sees current state,
+  including whatever the user just did in the UI.
+- **Conversation history**: caller-supplied (`ChatRequest.history`), not
+  stored server-side — no `chat_messages` table was added, per the plan's
+  "note this as a limitation rather than adding a table unless needed."
+  Part 10's frontend sidebar owns history in its own component state; it's
+  lost on page reload. Revisit with a real table only if that turns out to
+  matter in practice.
+- **Malformed-response handling**: `parse_model_output` is a pure function
+  (no network call) that turns the model's raw content string into a
+  `ChatModelOutput`, falling back to `{reply: <raw content or generic
+  message>, board_update: None}` on any JSON or schema error — tested
+  directly with plain strings, no mocking needed. `handle_chat` additionally
+  wraps *applying* an action in `try/except (LookupError, ValueError,
+  ValidationError)`: an action referencing a nonexistent column/card, or
+  missing a field a given action type actually needs (checked explicitly in
+  `apply_action`, since calling `board.py`'s functions directly bypasses
+  FastAPI's request-body validation), is silently skipped rather than
+  corrupting the board or failing the whole chat request — the user still
+  gets the model's reply text either way.
+- Every real (non-mocked) manual test of this — rename via natural language,
+  create-with-details, move-to-another-column, and an off-topic question
+  that correctly left `board_update: null` — worked correctly against the
+  live model, including through the actual Docker container.
 
 ## Conventions
 
