@@ -6,3 +6,4 @@
 **/test-results
 **/.git
 .env
+/data

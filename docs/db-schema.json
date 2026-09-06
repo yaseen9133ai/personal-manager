@@ -1,0 +1,74 @@
+{
+  "database": "sqlite",
+  "file_container_path": "/app/data/app.db",
+  "notes": "Created on first run if missing. Host-mounted from ./data (gitignored) so the container can be stopped/removed (scripts/stop.*) and restarted (scripts/start.*) without losing data.",
+  "pragmas": [
+    "PRAGMA foreign_keys = ON",
+    "PRAGMA journal_mode = WAL"
+  ],
+  "tables": {
+    "users": {
+      "description": "One row per user. MVP hardcodes login credentials in backend code (not stored here) and seeds exactly one user row, but the schema supports more users later.",
+      "columns": [
+        { "name": "id", "type": "INTEGER", "constraints": ["NOT NULL"] },
+        { "name": "username", "type": "TEXT", "constraints": ["NOT NULL", "UNIQUE"] },
+        { "name": "created_at", "type": "TEXT", "constraints": ["NOT NULL"], "default": "CURRENT_TIMESTAMP" }
+      ],
+      "primary_key": ["id"],
+      "primary_key_autoincrement": true
+    },
+    "board_columns": {
+      "description": "The 5 fixed Kanban columns, one set per user. 'slug' is the fixed, non-editable identity (also used as the column's id in the frontend's BoardData JSON); 'title' is the user-editable display name; 'position' fixes left-to-right order.",
+      "columns": [
+        { "name": "user_id", "type": "INTEGER", "constraints": ["NOT NULL"] },
+        { "name": "slug", "type": "TEXT", "constraints": ["NOT NULL"], "allowed_values": ["col-backlog", "col-discovery", "col-progress", "col-review", "col-done"] },
+        { "name": "title", "type": "TEXT", "constraints": ["NOT NULL"] },
+        { "name": "position", "type": "INTEGER", "constraints": ["NOT NULL"], "allowed_values": [0, 1, 2, 3, 4] }
+      ],
+      "primary_key": ["user_id", "slug"],
+      "foreign_keys": [
+        {
+          "columns": ["user_id"],
+          "references": { "table": "users", "columns": ["id"] },
+          "on_delete": "CASCADE"
+        }
+      ]
+    },
+    "cards": {
+      "description": "Cards belonging to a user's board. 'id' is a server-generated opaque string (e.g. 'card-<uuid4>'), matching the frontend's existing id convention.",
+      "columns": [
+        { "name": "user_id", "type": "INTEGER", "constraints": ["NOT NULL"] },
+        { "name": "id", "type": "TEXT", "constraints": ["NOT NULL"] },
+        { "name": "column_slug", "type": "TEXT", "constraints": ["NOT NULL"] },
+        { "name": "title", "type": "TEXT", "constraints": ["NOT NULL"] },
+        { "name": "details", "type": "TEXT", "constraints": ["NOT NULL"], "default": "''" },
+        { "name": "position", "type": "INTEGER", "constraints": ["NOT NULL"], "description": "Order within its column, 0-based." }
+      ],
+      "primary_key": ["user_id", "id"],
+      "foreign_keys": [
+        {
+          "columns": ["user_id"],
+          "references": { "table": "users", "columns": ["id"] },
+          "on_delete": "CASCADE"
+        },
+        {
+          "columns": ["user_id", "column_slug"],
+          "references": { "table": "board_columns", "columns": ["user_id", "slug"] },
+          "on_delete": "CASCADE",
+          "description": "Composite FK ensures a card's column belongs to the same user."
+        }
+      ]
+    }
+  },
+  "seed_data": {
+    "users": [{ "username": "user" }],
+    "board_columns_per_user": [
+      { "slug": "col-backlog", "title": "Backlog", "position": 0 },
+      { "slug": "col-discovery", "title": "Discovery", "position": 1 },
+      { "slug": "col-progress", "title": "In Progress", "position": 2 },
+      { "slug": "col-review", "title": "Review", "position": 3 },
+      { "slug": "col-done", "title": "Done", "position": 4 }
+    ],
+    "cards": "none -- real boards start empty; the frontend's 8 sample cards were only ever a frontend-only demo fixture"
+  }
+}

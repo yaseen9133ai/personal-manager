@@ -8,6 +8,8 @@ Set-Location (Join-Path $PSScriptRoot "..")
 $ImageName = "personal-manager-backend"
 $ContainerName = "personal-manager"
 
+New-Item -ItemType Directory -Force -Path "data" | Out-Null
+
 docker build -t $ImageName .
 
 $existing = docker ps -a --filter "name=^/$ContainerName$" --format "{{.Names}}"
@@ -19,6 +21,7 @@ docker run -d `
   --name $ContainerName `
   --env-file .env `
   -p "${Port}:8000" `
+  -v "${PWD}/data:/app/data" `
   $ImageName
 
 Write-Host "Running at http://localhost:$Port"

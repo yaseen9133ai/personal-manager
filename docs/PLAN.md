@@ -144,15 +144,15 @@ login form; wrong credentials show an error and do not grant access.
 
 ## Part 5: Database modeling
 
-- [ ] Design a SQLite schema for users, the (single, per-user) board, columns,
+- [x] Design a SQLite schema for users, the (single, per-user) board, columns,
       and cards. Save the schema as JSON in `docs/` (e.g.
       `docs/db-schema.json`), including table names, columns, types, keys,
       and relationships.
-- [ ] Write `docs/database.md` documenting the approach: why SQLite + plain
+- [x] Write `docs/database.md` documenting the approach: why SQLite + plain
       `sqlite3`, how the schema maps to the frontend's `BoardData` shape, how
       the 5 fixed columns are represented (seeded rows vs. enum), migration/
       init-on-first-run strategy.
-- [ ] User reviews and signs off on the schema before Part 6 implements it.
+- [x] User reviews and signs off on the schema before Part 6 implements it.
 
 **Tests**: N/A (design artifact) — reviewed by inspection.
 
@@ -163,13 +163,13 @@ login form; wrong credentials show an error and do not grant access.
 
 ## Part 6: Backend
 
-- [ ] Implement DB init: create the SQLite file and tables on first run if
+- [x] Implement DB init: create the SQLite file and tables on first run if
       missing, seed the fixed columns and a default user.
-- [ ] Add API routes (all requiring a valid session):
+- [x] Add API routes (all requiring a valid session):
       `GET /api/board` (full board for the current user),
       `PATCH /api/columns/{id}` (rename),
       `POST /api/cards`, `PATCH /api/cards/{id}` (edit/move), `DELETE /api/cards/{id}`.
-- [ ] Enforce per-user data isolation at the query level (every query scoped
+- [x] Enforce per-user data isolation at the query level (every query scoped
       to the session's user id), even though MVP only exposes one user.
 
 **Tests**:
