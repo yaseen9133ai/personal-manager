@@ -187,12 +187,12 @@ throwaway SQLite DB, and manual `curl`/Postman checks confirm the API matches
 
 ## Part 7: Frontend + Backend
 
-- [ ] Replace the frontend's local `useState(initialData)` with data fetched
+- [x] Replace the frontend's local `useState(initialData)` with data fetched
       from `GET /api/board` on load, with a loading state.
-- [ ] Wire rename, add card, delete card, and move card actions to call the
+- [x] Wire rename, add card, delete card, and move card actions to call the
       corresponding backend routes, updating local state from the response
       (or via optimistic update + reconciliation).
-- [ ] Handle API errors in the UI (e.g. session expired -> redirect to login).
+- [x] Handle API errors in the UI (e.g. session expired -> redirect to login).
 
 **Tests**:
 - Frontend unit tests updated/added to mock the API and verify each action

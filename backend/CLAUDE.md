@@ -77,6 +77,11 @@ didn't exist at all (never a 403, to avoid confirming existence).
   acceptable MVP limitation given there's only one user.
 - `get_current_user` (a FastAPI dependency in `main.py`) reads and verifies
   the `session` cookie; routes needing auth take it as a dependency.
+- Since the signing secret resets on every backend restart, any board API
+  call after a restart gets `401` even with an old, previously-valid cookie.
+  The frontend's `KanbanBoard` treats a `401` from any board call as "session
+  expired" and returns to the login form (`onSessionExpired` prop) rather
+  than showing a raw error — see `frontend/CLAUDE.md`'s Auth section.
 
 ## Database
 
@@ -84,8 +89,14 @@ didn't exist at all (never a 403, to avoid confirming existence).
   `docs/db-schema.json` for the schema and reasoning.
 - `db.get_connection()` lazily opens (and, on first call, initializes: creates
   tables + seeds the hardcoded user and their 5 columns) a single
-  long-lived connection. `db.reset_connection()` is test-only, forcing the
-  next `get_connection()` call to reopen against the current `DB_PATH`.
+  long-lived connection, guarded by a `threading.Lock` so concurrent
+  first-time requests (FastAPI runs sync routes in a thread pool) can't race
+  to open+init the same fresh file at once. `PRAGMA busy_timeout` is also set
+  so concurrent writes from different threads on that shared connection wait
+  for the lock instead of immediately raising "database is locked" — this
+  was a real, reproducible failure under Playwright's parallel e2e workers
+  before both fixes were added. `db.reset_connection()` is test-only, forcing
+  the next `get_connection()` call to reopen against the current `DB_PATH`.
 - `DB_PATH` env var overrides the DB file location (default:
   `backend/data/app.db` locally, which resolves to `/app/data/app.db` in the
   Docker image since it's computed relative to the source file, not `cwd`).

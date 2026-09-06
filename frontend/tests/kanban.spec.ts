@@ -19,10 +19,17 @@ test("adds a card to a column", async ({ page }) => {
 
 test("moves a card between columns", async ({ page }) => {
   await login(page);
-  const card = page.getByTestId("card-card-1");
-  const targetColumn = page.getByTestId("column-col-review");
+  const backlogColumn = page.getByTestId("column-col-backlog");
+  const reviewColumn = page.getByTestId("column-col-review");
+
+  await backlogColumn.getByRole("button", { name: /add a card/i }).click();
+  await backlogColumn.getByPlaceholder("Card title").fill("Card to move");
+  await backlogColumn.getByRole("button", { name: /add card/i }).click();
+  await expect(backlogColumn.getByText("Card to move")).toBeVisible();
+
+  const card = backlogColumn.getByText("Card to move");
   const cardBox = await card.boundingBox();
-  const columnBox = await targetColumn.boundingBox();
+  const columnBox = await reviewColumn.boundingBox();
   if (!cardBox || !columnBox) {
     throw new Error("Unable to resolve drag coordinates.");
   }
@@ -38,5 +45,24 @@ test("moves a card between columns", async ({ page }) => {
     { steps: 12 }
   );
   await page.mouse.up();
-  await expect(targetColumn.getByTestId("card-card-1")).toBeVisible();
+  await expect(reviewColumn.getByText("Card to move")).toBeVisible();
+});
+
+test("deletes a card", async ({ page }) => {
+  await login(page);
+  const firstColumn = page.locator('[data-testid^="column-"]').first();
+  await firstColumn.getByRole("button", { name: /add a card/i }).click();
+  await firstColumn.getByPlaceholder("Card title").fill("Card to delete");
+  await firstColumn.getByRole("button", { name: /add card/i }).click();
+  await expect(firstColumn.getByText("Card to delete")).toBeVisible();
+
+  // dnd-kit's sortable attributes give the card's <article> role="button"
+  // too, and its computed accessible name absorbs the nested delete
+  // button's aria-label -- matching by role/name is ambiguous, so target
+  // the actual <button> element directly instead.
+  const card = firstColumn
+    .locator('[data-testid^="card-"]')
+    .filter({ hasText: "Card to delete" });
+  await card.locator("button").click();
+  await expect(firstColumn.getByText("Card to delete")).not.toBeVisible();
 });

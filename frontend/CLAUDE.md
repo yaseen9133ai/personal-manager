@@ -1,9 +1,8 @@
 # Frontend — Kanban Studio
 
-Built with Next.js App Router, statically exported. The board itself still
-holds its data in local `useState` (no persistence yet — Part 7 wires it to
-the backend), but the app is now gated behind real login/session calls to the
-FastAPI backend (Part 4).
+Built with Next.js App Router, statically exported. Fully wired to the real
+FastAPI backend now: auth (Part 4) and board data (Part 7) both persist
+server-side — there is no client-only demo state left.
 
 ## Stack
 
@@ -32,19 +31,22 @@ src/
     KanbanCardPreview.tsx  # non-interactive card render used in DragOverlay
     NewCardForm.tsx        # inline "add card" form, toggled open/closed
   lib/
-    kanban.ts        # types (Card, Column, BoardData), initialData seed, moveCard(), createId()
+    kanban.ts        # types (Card, Column, BoardData), moveCard() (pure reducer)
     auth.ts          # fetchMe(), login(), logout() -- calls /api/auth/*
+    board-api.ts     # fetchBoard(), renameColumn(), createCard(), updateCard(),
+                      # deleteCard() -- calls /api/board, /api/columns/*, /api/cards/*
   test/
     setup.ts, vitest.d.ts
 tests/
   helpers.ts         # login(page) helper shared by specs
   kanban.spec.ts     # Playwright e2e specs (board interactions)
   auth.spec.ts       # Playwright e2e specs (login/logout flow)
+  persistence.spec.ts # Playwright e2e: add/move/rename survive a page reload
 scripts/
   e2e-server.mjs     # boots the real backend+static export for e2e (see Testing)
 ```
 
-## Data model (current, in-memory only)
+## Data model
 
 ```ts
 type Card = { id: string; title: string; details: string };
@@ -52,12 +54,15 @@ type Column = { id: string; title: string; cardIds: string[] };
 type BoardData = { columns: Column[]; cards: Record<string, Card> };
 ```
 
-- `initialData` in `lib/kanban.ts` seeds 5 fixed columns (Backlog, Discovery, In
-  Progress, Review, Done) with 8 sample cards, ids like `col-backlog`, `card-1`.
-- `moveCard(columns, activeId, overId)` is pure — handles reordering within a
-  column and moving across columns (dropped on a card or on an empty column).
-- `createId(prefix)` makes a client-side id from `Math.random` + timestamp
-  (`card-<random><time>`), used only for new cards created client-side.
+This shape is deliberately identical to the backend's `GET /api/board`
+response (see `docs/database.md`) — no translation layer needed.
+
+- `moveCard(columns, activeId, overId)` (`lib/kanban.ts`) is a pure function —
+  handles reordering within a column and moving across columns (dropped on a
+  card or on an empty column). Used for the local, optimistic part of a drag;
+  the actual persistence goes through `board-api.ts`'s `updateCard`.
+- Card ids are server-generated (`card-<uuid4 prefix>`, see
+  `backend/src/backend/board.py`) — the frontend never invents an id itself.
 
 ## Auth
 
@@ -74,25 +79,45 @@ type BoardData = { columns: Column[]; cards: Record<string, Card> };
 - `KanbanBoard` takes a required `onLogout` prop (a "Log out" button in its
   header); `AppShell` wires this to `POST /api/auth/logout` then clears its
   user state, which re-renders `LoginForm`.
+- `KanbanBoard` also takes a required `onSessionExpired` prop, called whenever
+  any board API call returns `401` (e.g. the signed session cookie's secret
+  changed because the backend restarted — see `backend/CLAUDE.md`'s Auth
+  section). `AppShell` wires this to the same "clear user state" effect as
+  logout, but without calling `/api/auth/logout` first (there's no valid
+  session to log out of).
 - Credentials are hardcoded server-side (`user` / `password`); there's no
   signup or per-user data yet (see root `CLAUDE.md`'s MVP limitations).
 
 ## State and behavior
 
-- `KanbanBoard` holds all board state in a single `useState<BoardData>`, seeded
-  from `initialData`. There is no persistence — a page reload resets to the seed.
-- Column rename: plain controlled `<input>` in `KanbanColumn`, updates on every
-  keystroke via `onRename(columnId, title)`.
+- `KanbanBoard` fetches the board from `GET /api/board` on mount (shows
+  "Loading board..." until it resolves) and holds the result in a single
+  `useState<BoardData>`. Every mutation calls the backend; there is no
+  client-only state left, so a page reload or container restart preserves
+  everything.
+- Column rename: `KanbanColumn`'s input calls `onRename` (live, per keystroke
+  — updates local state only, for responsive typing) on `onChange`, and
+  `onRenameCommit` on `onBlur` (fires `PATCH /api/columns/{id}`). Splitting
+  these avoids firing a network request per keystroke.
 - Add card: `NewCardForm` collects title (required) + details (optional,
-  defaults to `"No details yet."`), calls `onAddCard`.
-- Delete card: button on each `KanbanCard` calls `onDeleteCard`.
+  defaults to `"No details yet."`), calls `onAddCard`, which awaits
+  `POST /api/cards` and adds the server-returned card (with its real id) to
+  local state.
+- Delete card: button on each `KanbanCard` calls `onDeleteCard`, which awaits
+  `DELETE /api/cards/{id}` before removing it from local state.
 - Drag and drop: `DndContext` with `PointerSensor` (6px activation distance)
   and `closestCorners` collision detection. Columns are `useDroppable`; cards
   are `useSortable` inside a `SortableContext` per column. `DragOverlay` shows
-  `KanbanCardPreview` for the actively dragged card.
+  `KanbanCardPreview` for the actively dragged card. On drop, the local
+  `moveCard` reducer applies immediately (optimistic, for a snappy drag), then
+  `PATCH /api/cards/{id}` fires in the background with the resulting
+  `column_id`/`index`.
+- Errors: any failed mutation calls `reportMutationError`, which re-fetches
+  the board (to resync with the server after a partial failure) and shows the
+  message in a `data-testid="board-error"` banner. A `401` specifically calls
+  the `onSessionExpired` prop instead (see Auth) rather than showing an error.
 - No card "edit" UI beyond delete/re-add yet — CLAUDE.md's business requirement
-  of editing cards is not yet implemented in this demo (add/delete/move/rename
-  column only).
+  of editing cards is not yet implemented (add/delete/move/rename column only).
 
 ## Styling
 
@@ -108,18 +133,23 @@ type BoardData = { columns: Column[]; cards: Record<string, Card> };
 ## Testing
 
 - Unit/component: `npm run test:unit` (Vitest, jsdom environment). Covers
-  `moveCard` logic (`lib/kanban.test.ts`), `KanbanBoard` render/rename/add/
-  delete, `LoginForm`, and `AppShell` (the latter two mock `fetch` with
-  `vi.stubGlobal` rather than hitting a real backend). Config excludes
-  `tests/` (the Playwright dir) from Vitest's glob.
+  `moveCard` logic (`lib/kanban.test.ts`), `LoginForm`/`AppShell` (mock
+  `fetch` directly with `vi.stubGlobal`), and `KanbanBoard` (mocks the whole
+  `@/lib/board-api` module with `vi.mock` and asserts each action calls the
+  right endpoint with the right payload) — none hit a real backend. Config
+  excludes `tests/` (the Playwright dir) from Vitest's glob.
 - E2E: `npm run test:e2e` (Playwright, chromium only). Since the app is now
   gated by a real login call, `playwright.config.ts`'s `webServer` no longer
   runs `next dev` (which has no backend) — it runs
   `npm run build && node scripts/e2e-server.mjs`, which builds the static
   export and starts the *real* FastAPI backend (`uv run uvicorn`) serving it,
-  with `STATIC_DIR` pointed at the fresh `frontend/out`. This means e2e tests
-  exercise the actual full-stack app, auth included, not just the frontend.
-  `tests/helpers.ts` exports a `login(page)` helper used by both spec files.
+  with `STATIC_DIR` pointed at the fresh `frontend/out` and `DB_PATH` pointed
+  at a throwaway `.e2e-data/test.db` (wiped at the start of every run — never
+  the developer's real `backend/data/app.db`). This means e2e tests exercise
+  the actual full-stack app, auth and persistence included, not just the
+  frontend. Since real boards start with 5 empty columns (no seeded demo
+  cards), specs that need a card create one via the UI first.
+  `tests/helpers.ts` exports a `login(page)` helper used by all spec files.
 - `npm run test:all` runs unit then e2e.
 - If port 3000 is already in use on your machine (e.g. by an unrelated dev
   server), temporarily edit the three `3000`s in `playwright.config.ts`
@@ -139,9 +169,7 @@ data fetching), so nothing here should ever need a Node process at runtime.
 
 These are expected — later plan parts (see `docs/PLAN.md`) build on this:
 
-- Board data (columns/cards) is still local `useState`, lost on refresh —
-  only auth is backed by the real API so far. Part 7 wires up board CRUD.
-- No AI chat sidebar.
+- No AI chat sidebar yet (Parts 8-10).
 - Card editing (beyond delete) is not implemented.
 
 ## Conventions to preserve when extending

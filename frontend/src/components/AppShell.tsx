@@ -20,6 +20,10 @@ export const AppShell = () => {
     setUser(null);
   };
 
+  const handleSessionExpired = () => {
+    setUser(null);
+  };
+
   if (isChecking) {
     return (
       <main className="flex min-h-screen items-center justify-center text-sm text-[var(--gray-text)]">
@@ -32,5 +36,7 @@ export const AppShell = () => {
     return <LoginForm onSuccess={setUser} />;
   }
 
-  return <KanbanBoard onLogout={handleLogout} />;
+  return (
+    <KanbanBoard onLogout={handleLogout} onSessionExpired={handleSessionExpired} />
+  );
 };

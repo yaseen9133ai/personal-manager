@@ -1,6 +1,21 @@
 import { render, screen } from "@testing-library/react";
 import { AppShell } from "@/components/AppShell";
 
+vi.mock("@/lib/board-api", () => ({
+  fetchBoard: vi.fn().mockResolvedValue({ columns: [], cards: {} }),
+  renameColumn: vi.fn(),
+  createCard: vi.fn(),
+  updateCard: vi.fn(),
+  deleteCard: vi.fn(),
+  ApiError: class ApiError extends Error {
+    status: number;
+    constructor(status: number, message: string) {
+      super(message);
+      this.status = status;
+    }
+  },
+}));
+
 describe("AppShell", () => {
   afterEach(() => {
     vi.unstubAllGlobals();

@@ -1,5 +1,6 @@
 import os
 import sqlite3
+import threading
 from pathlib import Path
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "data" / "app.db"
@@ -41,6 +42,7 @@ CREATE TABLE IF NOT EXISTS cards (
 """
 
 _connection: sqlite3.Connection | None = None
+_connection_lock = threading.Lock()
 
 
 def get_db_path() -> Path:
@@ -73,15 +75,24 @@ def get_user_id(conn: sqlite3.Connection, username: str) -> int | None:
 
 def get_connection() -> sqlite3.Connection:
     global _connection
+    # FastAPI runs sync routes in a thread pool, so concurrent first-time
+    # requests can otherwise race to open+init the same fresh DB file at
+    # once, which SQLite surfaces as "database is locked".
     if _connection is None:
-        db_path = get_db_path()
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(db_path, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
-        conn.execute("PRAGMA journal_mode = WAL")
-        init_db(conn)
-        _connection = conn
+        with _connection_lock:
+            if _connection is None:
+                db_path = get_db_path()
+                db_path.parent.mkdir(parents=True, exist_ok=True)
+                conn = sqlite3.connect(db_path, check_same_thread=False)
+                conn.row_factory = sqlite3.Row
+                conn.execute("PRAGMA foreign_keys = ON")
+                conn.execute("PRAGMA journal_mode = WAL")
+                # The single connection is shared across FastAPI's threadpool
+                # threads; busy_timeout makes concurrent writes wait for the
+                # lock instead of immediately raising "database is locked".
+                conn.execute("PRAGMA busy_timeout = 5000")
+                init_db(conn)
+                _connection = conn
     return _connection
 
 

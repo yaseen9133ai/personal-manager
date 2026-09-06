@@ -3,6 +3,7 @@
 // Playwright exercises the actual full-stack app (including auth) instead
 // of just the frontend against `next dev`.
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -11,6 +12,13 @@ const frontendRoot = path.resolve(__dirname, "..");
 const backendRoot = path.resolve(frontendRoot, "../backend");
 const staticDir = path.join(frontendRoot, "out");
 const port = process.env.E2E_PORT ?? "3000";
+
+// Fresh DB per e2e run -- never the developer's real backend/data/app.db --
+// so tests always start from the 5 seeded columns with no cards.
+const e2eDataDir = path.join(frontendRoot, ".e2e-data");
+fs.rmSync(e2eDataDir, { recursive: true, force: true });
+fs.mkdirSync(e2eDataDir, { recursive: true });
+const dbPath = path.join(e2eDataDir, "test.db");
 const args = [
   "run",
   "uvicorn",
@@ -33,7 +41,7 @@ const uvicorn = spawn(
   process.platform === "win32" ? [] : args,
   {
     cwd: backendRoot,
-    env: { ...process.env, STATIC_DIR: staticDir },
+    env: { ...process.env, STATIC_DIR: staticDir, DB_PATH: dbPath },
     stdio: "inherit",
     shell: process.platform === "win32",
   }
