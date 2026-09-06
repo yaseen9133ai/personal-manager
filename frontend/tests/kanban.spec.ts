@@ -3,7 +3,9 @@ import { login } from "./helpers";
 
 test("loads the kanban board", async ({ page }) => {
   await login(page);
-  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Kanban Studio", exact: true })
+  ).toBeVisible();
   await expect(page.locator('[data-testid^="column-"]')).toHaveCount(5);
 });
 
@@ -48,6 +50,55 @@ test("moves a card between columns", async ({ page }) => {
   await expect(reviewColumn.getByText("Card to move")).toBeVisible();
 });
 
+test("edits a card's title and details", async ({ page }) => {
+  await login(page);
+  const firstColumn = page.locator('[data-testid^="column-"]').first();
+  await firstColumn.getByRole("button", { name: /add a card/i }).click();
+  await firstColumn.getByPlaceholder("Card title").fill("Card to edit");
+  await firstColumn.getByRole("button", { name: /add card/i }).click();
+  await expect(firstColumn.getByText("Card to edit")).toBeVisible();
+
+  // Once editing starts, the title moves from text content into an input's
+  // value -- a hasText-filtered locator would stop matching (input values
+  // aren't part of an element's text content), so resolve the stable
+  // data-testid once up front and re-locate by that instead.
+  const cardBeforeEditing = firstColumn
+    .locator('[data-testid^="card-"]')
+    .filter({ hasText: "Card to edit" });
+  const cardTestId = await cardBeforeEditing.getAttribute("data-testid");
+  await cardBeforeEditing.locator("button", { hasText: "Edit" }).click();
+
+  const card = page.getByTestId(cardTestId!);
+  await card.getByLabel("Card title").fill("Edited title");
+  await card.getByLabel("Card details").fill("Edited details");
+  await card.locator("button", { hasText: "Save" }).click();
+
+  await expect(firstColumn.getByText("Edited title")).toBeVisible();
+  await expect(firstColumn.getByText("Edited details")).toBeVisible();
+});
+
+test("cancels editing a card without saving changes", async ({ page }) => {
+  await login(page);
+  const firstColumn = page.locator('[data-testid^="column-"]').first();
+  await firstColumn.getByRole("button", { name: /add a card/i }).click();
+  await firstColumn.getByPlaceholder("Card title").fill("Original title");
+  await firstColumn.getByRole("button", { name: /add card/i }).click();
+  await expect(firstColumn.getByText("Original title")).toBeVisible();
+
+  const cardBeforeEditing = firstColumn
+    .locator('[data-testid^="card-"]')
+    .filter({ hasText: "Original title" });
+  const cardTestId = await cardBeforeEditing.getAttribute("data-testid");
+  await cardBeforeEditing.locator("button", { hasText: "Edit" }).click();
+
+  const card = page.getByTestId(cardTestId!);
+  await card.getByLabel("Card title").fill("Should not be saved");
+  await card.locator("button", { hasText: "Cancel" }).click();
+
+  await expect(firstColumn.getByText("Original title")).toBeVisible();
+  await expect(firstColumn.getByText("Should not be saved")).not.toBeVisible();
+});
+
 test("deletes a card", async ({ page }) => {
   await login(page);
   const firstColumn = page.locator('[data-testid^="column-"]').first();
@@ -57,12 +108,11 @@ test("deletes a card", async ({ page }) => {
   await expect(firstColumn.getByText("Card to delete")).toBeVisible();
 
   // dnd-kit's sortable attributes give the card's <article> role="button"
-  // too, and its computed accessible name absorbs the nested delete
-  // button's aria-label -- matching by role/name is ambiguous, so target
-  // the actual <button> element directly instead.
+  // too, and its computed accessible name absorbs the nested buttons'
+  // aria-labels -- target by visible button text instead of role/name.
   const card = firstColumn
     .locator('[data-testid^="card-"]')
     .filter({ hasText: "Card to delete" });
-  await card.locator("button").click();
+  await card.locator("button", { hasText: "Remove" }).click();
   await expect(firstColumn.getByText("Card to delete")).not.toBeVisible();
 });

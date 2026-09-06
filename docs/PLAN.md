@@ -265,13 +265,13 @@ doesn't request a change leaves the board untouched.
 
 ## Part 10: AI chat sidebar UI
 
-- [ ] Build a chat sidebar component (message list + input) matching the
+- [x] Build a chat sidebar component (message list + input) matching the
       project's color scheme, added to the board layout.
-- [ ] Wire it to `POST /api/chat`; render the AI's reply in the message list.
-- [ ] When the response includes a board update, refresh the board view
+- [x] Wire it to `POST /api/chat`; render the AI's reply in the message list.
+- [x] When the response includes a board update, refresh the board view
       automatically (re-fetch or apply the returned updated board) without a
       manual page reload.
-- [ ] Handle loading and error states in the chat UI (e.g. Groq call fails).
+- [x] Handle loading and error states in the chat UI (e.g. Groq call fails).
 
 **Tests**:
 - Frontend unit tests for the chat component: sending a message, displaying

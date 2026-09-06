@@ -19,7 +19,9 @@ test("logs in, sees the board, logs out, and sees the login form again", async (
   page,
 }) => {
   await login(page);
-  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Kanban Studio", exact: true })
+  ).toBeVisible();
 
   await page.getByRole("button", { name: /log out/i }).click();
 

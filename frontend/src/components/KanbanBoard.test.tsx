@@ -9,6 +9,7 @@ vi.mock("@/lib/board-api", () => ({
   createCard: vi.fn(),
   updateCard: vi.fn(),
   deleteCard: vi.fn(),
+  sendChatMessage: vi.fn(),
   ApiError: class ApiError extends Error {
     status: number;
     constructor(status: number, message: string) {
@@ -89,6 +90,67 @@ describe("KanbanBoard", () => {
     expect(await within(column).findByText("New card")).toBeInTheDocument();
   });
 
+  it("edits a card's title and details via the API", async () => {
+    vi.mocked(boardApi.updateCard).mockResolvedValue({
+      id: "card-1",
+      title: "Updated title",
+      details: "Updated details",
+    });
+
+    render(<KanbanBoard onLogout={noop} onSessionExpired={noop} />);
+    const column = await screen.findByTestId("column-col-a");
+
+    await userEvent.click(
+      within(column).getByRole("button", { name: /edit existing card/i })
+    );
+
+    const titleInput = within(column).getByLabelText("Card title");
+    await userEvent.clear(titleInput);
+    await userEvent.type(titleInput, "Updated title");
+
+    const detailsInput = within(column).getByLabelText("Card details");
+    await userEvent.clear(detailsInput);
+    await userEvent.type(detailsInput, "Updated details");
+
+    await userEvent.click(within(column).getByRole("button", { name: /save/i }));
+
+    expect(boardApi.updateCard).toHaveBeenCalledWith("card-1", {
+      title: "Updated title",
+      details: "Updated details",
+    });
+    expect(await within(column).findByText("Updated title")).toBeInTheDocument();
+    expect(within(column).getByText("Updated details")).toBeInTheDocument();
+  });
+
+  it("cancels editing a card without calling the API", async () => {
+    render(<KanbanBoard onLogout={noop} onSessionExpired={noop} />);
+    const column = await screen.findByTestId("column-col-a");
+
+    await userEvent.click(
+      within(column).getByRole("button", { name: /edit existing card/i })
+    );
+    const titleInput = within(column).getByLabelText("Card title");
+    await userEvent.clear(titleInput);
+    await userEvent.type(titleInput, "Should not be saved");
+    await userEvent.click(within(column).getByRole("button", { name: /cancel/i }));
+
+    expect(boardApi.updateCard).not.toHaveBeenCalled();
+    expect(within(column).getByText("Existing card")).toBeInTheDocument();
+  });
+
+  it("toggles the chat sidebar with the Hide/Show chat button", async () => {
+    render(<KanbanBoard onLogout={noop} onSessionExpired={noop} />);
+    await screen.findAllByTestId(/column-/i);
+
+    expect(screen.getByTestId("chat-messages")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /hide chat/i }));
+    expect(screen.queryByTestId("chat-messages")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /show chat/i }));
+    expect(screen.getByTestId("chat-messages")).toBeInTheDocument();
+  });
+
   it("deletes a card via the API", async () => {
     render(<KanbanBoard onLogout={noop} onSessionExpired={noop} />);
     const column = await screen.findByTestId("column-col-a");
@@ -102,6 +164,52 @@ describe("KanbanBoard", () => {
     await waitFor(() =>
       expect(within(column).queryByText("Existing card")).not.toBeInTheDocument()
     );
+  });
+
+  it("refreshes the board when the chat response includes an update", async () => {
+    vi.mocked(boardApi.sendChatMessage).mockResolvedValue({
+      reply: "Renamed it!",
+      board: {
+        columns: [
+          { id: "col-a", title: "Renamed by AI", cardIds: ["card-1"] },
+          { id: "col-b", title: "B", cardIds: [] },
+        ],
+        cards: {
+          "card-1": { id: "card-1", title: "Existing card", details: "Notes" },
+        },
+      },
+    });
+
+    render(<KanbanBoard onLogout={noop} onSessionExpired={noop} />);
+    await screen.findAllByTestId(/column-/i);
+
+    await userEvent.type(
+      screen.getByLabelText(/chat message/i),
+      "rename column A"
+    );
+    await userEvent.click(screen.getByRole("button", { name: /send/i }));
+
+    expect(boardApi.sendChatMessage).toHaveBeenCalledWith("rename column A", []);
+    expect(
+      await within(screen.getByTestId("column-col-a")).findByDisplayValue(
+        "Renamed by AI"
+      )
+    ).toBeInTheDocument();
+  });
+
+  it("redirects to login when a chat message returns 401", async () => {
+    vi.mocked(boardApi.sendChatMessage).mockRejectedValue(
+      new boardApi.ApiError(401, "Not authenticated")
+    );
+    const onSessionExpired = vi.fn();
+
+    render(<KanbanBoard onLogout={noop} onSessionExpired={onSessionExpired} />);
+    await screen.findAllByTestId(/column-/i);
+
+    await userEvent.type(screen.getByLabelText(/chat message/i), "hello");
+    await userEvent.click(screen.getByRole("button", { name: /send/i }));
+
+    await waitFor(() => expect(onSessionExpired).toHaveBeenCalled());
   });
 
   it("redirects to login when loading the board returns 401", async () => {

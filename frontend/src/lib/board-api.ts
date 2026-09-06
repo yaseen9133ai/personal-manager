@@ -77,3 +77,17 @@ export function updateCard(
 export function deleteCard(cardId: string): Promise<void> {
   return request<void>(`/api/cards/${cardId}`, { method: "DELETE" });
 }
+
+export type ChatMessage = { role: "user" | "assistant"; content: string };
+
+export type ChatResult = { reply: string; board: BoardData };
+
+export function sendChatMessage(
+  message: string,
+  history: ChatMessage[]
+): Promise<ChatResult> {
+  return request<ChatResult>("/api/chat", {
+    method: "POST",
+    body: JSON.stringify({ message, history }),
+  });
+}

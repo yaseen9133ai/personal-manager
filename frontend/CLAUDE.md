@@ -30,11 +30,13 @@ src/
     KanbanCard.tsx         # one draggable card (sortable), with delete button
     KanbanCardPreview.tsx  # non-interactive card render used in DragOverlay
     NewCardForm.tsx        # inline "add card" form, toggled open/closed
+    ChatSidebar.tsx        # AI chat: message list + input, calls onSendMessage prop
   lib/
     kanban.ts        # types (Card, Column, BoardData), moveCard() (pure reducer)
     auth.ts          # fetchMe(), login(), logout() -- calls /api/auth/*
     board-api.ts     # fetchBoard(), renameColumn(), createCard(), updateCard(),
-                      # deleteCard() -- calls /api/board, /api/columns/*, /api/cards/*
+                      # deleteCard(), sendChatMessage() -- calls /api/board,
+                      # /api/columns/*, /api/cards/*, /api/chat
   test/
     setup.ts, vitest.d.ts
 tests/
@@ -42,6 +44,7 @@ tests/
   kanban.spec.ts     # Playwright e2e specs (board interactions)
   auth.spec.ts       # Playwright e2e specs (login/logout flow)
   persistence.spec.ts # Playwright e2e: add/move/rename survive a page reload
+  chat.spec.ts       # Playwright e2e specs (real AI chat, board updates live)
 scripts/
   e2e-server.mjs     # boots the real backend+static export for e2e (see Testing)
 ```
@@ -105,6 +108,14 @@ response (see `docs/database.md`) — no translation layer needed.
   local state.
 - Delete card: button on each `KanbanCard` calls `onDeleteCard`, which awaits
   `DELETE /api/cards/{id}` before removing it from local state.
+- Edit card: `KanbanCard` has its own `isEditing` toggle — clicking "Edit"
+  swaps in a form (title input + details textarea, prefilled) rendered
+  in-place of the card, with Save/Cancel. Save calls `onEditCard`, which
+  awaits `PATCH /api/cards/{id}` with `{title, details}` and updates local
+  state from the response; Cancel just discards local edits, no API call.
+  The editing form's `<article>` deliberately does *not* spread dnd-kit's
+  `{...attributes} {...listeners}` (unlike the normal card view) so it isn't
+  draggable while being edited.
 - Drag and drop: `DndContext` with `PointerSensor` (6px activation distance)
   and `closestCorners` collision detection. Columns are `useDroppable`; cards
   are `useSortable` inside a `SortableContext` per column. `DragOverlay` shows
@@ -116,8 +127,43 @@ response (see `docs/database.md`) — no translation layer needed.
   the board (to resync with the server after a partial failure) and shows the
   message in a `data-testid="board-error"` banner. A `401` specifically calls
   the `onSessionExpired` prop instead (see Auth) rather than showing an error.
-- No card "edit" UI beyond delete/re-add yet — CLAUDE.md's business requirement
-  of editing cards is not yet implemented (add/delete/move/rename column only).
+## AI chat
+
+- `ChatSidebar` owns its own message list (`useState<ChatMessage[]>`) and
+  input; it never calls `board-api.ts` itself. It receives one prop,
+  `onSendMessage(message, history) => Promise<ChatResult>`, and calls it with
+  the message just typed plus the *prior* messages array as `history` (the
+  backend appends `message` itself — see `backend/CLAUDE.md`'s AI chat
+  section). This mirrors the existing convention of API calls living in
+  `KanbanBoard`, keeping `ChatSidebar` a "dumb" presentational component that
+  unit tests exercise with a plain mock function, no module mocking needed.
+- `KanbanBoard.handleSendChatMessage` is that prop's real implementation:
+  calls `board-api.ts`'s `sendChatMessage`, then unconditionally
+  `setBoard(result.board)` — the backend always returns the current board
+  (whether or not it changed), so the UI stays in sync with zero extra
+  fetches and no need to detect "did an update happen?" client-side. A `401`
+  triggers `onSessionExpired`, same as every other board mutation.
+- Conversation history lives only in `ChatSidebar`'s component state — lost
+  on page reload/logout, per the backend's documented Part 9 limitation (no
+  `chat_messages` table). Each browser tab's chat starts fresh.
+- Layout: the sidebar sits beside the 5-column board grid in a
+  `flex-col lg:flex-row` container (stacks on narrow screens, side-by-side
+  on `lg`+) — see `KanbanBoard.tsx`'s render. `KanbanBoard`'s "Hide chat" /
+  "Show chat" button (`isChatOpen` state) conditionally renders `ChatSidebar`
+  entirely — hiding it lets the board grid reclaim the full row width
+  (`section` is `flex-1` with no sibling), which matters on laptop-width
+  screens where 5 columns + a permanent sidebar get uncomfortably narrow for
+  dragging. Prefer this over shrinking the sidebar further if width still
+  feels tight — verified at 1366/1440/1920px via real screenshots, not just
+  assumed from the Tailwind classes.
+- `ChatSidebar`'s own "New chat" button (visible once there's at least one
+  message) clears its local `messages` state back to empty — the only way to
+  reset a conversation, since history is never persisted (see above).
+- The sidebar's own heading is "Ask Kanban Studio" (`<h2>`), which is a
+  substring of the board's own "Kanban Studio" `<h1>` — Playwright's
+  role/name queries do substring matching by default, so any e2e locator for
+  the board heading needs `{ name: "Kanban Studio", exact: true }` to avoid
+  matching both. `tests/helpers.ts`'s `login()` already does this.
 
 ## Styling
 
@@ -134,10 +180,13 @@ response (see `docs/database.md`) — no translation layer needed.
 
 - Unit/component: `npm run test:unit` (Vitest, jsdom environment). Covers
   `moveCard` logic (`lib/kanban.test.ts`), `LoginForm`/`AppShell` (mock
-  `fetch` directly with `vi.stubGlobal`), and `KanbanBoard` (mocks the whole
+  `fetch` directly with `vi.stubGlobal`), `KanbanBoard` (mocks the whole
   `@/lib/board-api` module with `vi.mock` and asserts each action calls the
-  right endpoint with the right payload) — none hit a real backend. Config
-  excludes `tests/` (the Playwright dir) from Vitest's glob.
+  right endpoint with the right payload, including that a chat response's
+  `board` triggers a visible re-render), and `ChatSidebar` (passed a plain
+  mock `onSendMessage` function directly — no module mocking needed, see AI
+  chat section) — none hit a real backend. Config excludes `tests/` (the
+  Playwright dir) from Vitest's glob.
 - E2E: `npm run test:e2e` (Playwright, chromium only). Since the app is now
   gated by a real login call, `playwright.config.ts`'s `webServer` no longer
   runs `next dev` (which has no backend) — it runs
@@ -150,6 +199,9 @@ response (see `docs/database.md`) — no translation layer needed.
   frontend. Since real boards start with 5 empty columns (no seeded demo
   cards), specs that need a card create one via the UI first.
   `tests/helpers.ts` exports a `login(page)` helper used by all spec files.
+  `chat.spec.ts` makes real Groq calls (no mocking) — same tradeoff as the
+  backend's live tests: slower and non-deterministic in content, but proves
+  the actual integration works, not just our own mocked assumptions about it.
 - `npm run test:all` runs unit then e2e.
 - If port 3000 is already in use on your machine (e.g. by an unrelated dev
   server), temporarily edit the three `3000`s in `playwright.config.ts`
@@ -165,12 +217,9 @@ response (see `docs/database.md`) — no translation layer needed.
 server-only Next features in use (no route handlers, server actions, or SSR
 data fetching), so nothing here should ever need a Node process at runtime.
 
-## Known gaps relative to the full product spec (see root `CLAUDE.md`)
-
-These are expected — later plan parts (see `docs/PLAN.md`) build on this:
-
-- No AI chat sidebar yet (Parts 8-10).
-- Card editing (beyond delete) is not implemented.
+All of the root `CLAUDE.md`'s business requirements are implemented as of
+this point: sign-in, drag-and-drop board with renameable columns, card
+create/edit/move/delete, and an AI chat sidebar that can update the board.
 
 ## Conventions to preserve when extending
 
