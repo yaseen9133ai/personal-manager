@@ -13,6 +13,14 @@ SESSION_COOKIE = "session"
 _SECRET_KEY = secrets.token_bytes(32)
 
 
+def verify_credentials(username: str, password: str) -> bool:
+    # Constant-time comparison -- avoids leaking match-length via timing,
+    # matching the compare_digest already used for session signatures below.
+    return hmac.compare_digest(username, VALID_USERNAME) and hmac.compare_digest(
+        password, VALID_PASSWORD
+    )
+
+
 def sign_session(username: str) -> str:
     payload_b64 = base64.urlsafe_b64encode(username.encode()).decode().rstrip("=")
     signature = hmac.new(_SECRET_KEY, payload_b64.encode(), hashlib.sha256).hexdigest()

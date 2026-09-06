@@ -7,9 +7,8 @@ from pydantic import BaseModel
 
 from backend.auth import (
     SESSION_COOKIE,
-    VALID_PASSWORD,
-    VALID_USERNAME,
     sign_session,
+    verify_credentials,
     verify_session,
 )
 from backend.board import (
@@ -55,7 +54,7 @@ def get_current_user(session: str | None = Cookie(default=None)) -> str:
 
 @app.post("/api/auth/login", response_model=UserOut)
 def login(payload: LoginRequest, response: Response) -> UserOut:
-    if payload.username != VALID_USERNAME or payload.password != VALID_PASSWORD:
+    if not verify_credentials(payload.username, payload.password):
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
     response.set_cookie(

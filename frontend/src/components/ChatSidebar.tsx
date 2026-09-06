@@ -48,7 +48,13 @@ export const ChatSidebar = ({ onSendMessage }: ChatSidebarProps) => {
   };
 
   return (
-    <aside className="flex w-full flex-col gap-4 rounded-[32px] border border-[var(--stroke)] bg-white/80 p-6 shadow-[var(--shadow)] backdrop-blur lg:w-80">
+    // No backdrop-blur here: it's a GPU-expensive compositing effect, and
+    // dnd-kit's DragOverlay repositions the dragged card every animation
+    // frame while dragging -- a blurred panel sharing the frame with that
+    // continuous animation is what made dragging feel choppy specifically
+    // while the sidebar was open (hiding it removed the only other blurred
+    // panel on screen besides the header).
+    <aside className="flex w-full flex-col gap-4 rounded-[32px] border border-[var(--stroke)] bg-white/95 p-6 shadow-[var(--shadow)] lg:w-80">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[var(--gray-text)]">

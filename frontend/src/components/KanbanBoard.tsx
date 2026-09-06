@@ -7,7 +7,9 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  closestCorners,
+  pointerWithin,
+  rectIntersection,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
@@ -46,6 +48,19 @@ export const KanbanBoard = ({ onLogout, onSessionExpired }: KanbanBoardProps) =>
       activationConstraint: { distance: 6 },
     })
   );
+
+  // closestCorners compares the whole dragged card's rect against every
+  // droppable's corners, which for a short drag into an adjacent column
+  // (e.g. Backlog -> Discovery) can keep favoring the source column right
+  // up to the boundary -- the card visually snaps back instead of moving.
+  // pointerWithin checks the actual cursor position instead, so crossing
+  // into the next column registers immediately; rectIntersection is only a
+  // fallback for the rare frame where the pointer sits in a gap between
+  // droppables.
+  const collisionDetection: CollisionDetection = (args) => {
+    const pointerCollisions = pointerWithin(args);
+    return pointerCollisions.length > 0 ? pointerCollisions : rectIntersection(args);
+  };
 
   const cardsById = useMemo(() => board.cards, [board.cards]);
 
@@ -90,6 +105,12 @@ export const KanbanBoard = ({ onLogout, onSessionExpired }: KanbanBoardProps) =>
     const activeId = active.id as string;
     const overId = over.id as string;
     const nextColumns = moveCard(board.columns, activeId, overId);
+    if (nextColumns === board.columns) {
+      // moveCard returns the same array reference when it couldn't resolve
+      // the drop into an actual change -- nothing moved, so skip the state
+      // update and the PATCH below.
+      return;
+    }
     setBoard((prev) => ({ ...prev, columns: nextColumns }));
 
     const targetColumn = nextColumns.find((column) =>
@@ -260,7 +281,7 @@ export const KanbanBoard = ({ onLogout, onSessionExpired }: KanbanBoardProps) =>
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCorners}
+            collisionDetection={collisionDetection}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >

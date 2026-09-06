@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import clsx from "clsx";
@@ -16,6 +16,18 @@ export const KanbanCard = ({ card, onDelete, onEdit }: KanbanCardProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(card.title);
   const [details, setDetails] = useState(card.details);
+
+  // If the card changes from outside this form while it's open (e.g. the AI
+  // chat sidebar edits the same card), drop out of editing rather than
+  // risking Save overwriting the newer server value with stale local edits.
+  // The card's own save flow already sets isEditing false before this runs,
+  // so it never fights with a normal save.
+  useEffect(() => {
+    if (isEditing) {
+      setIsEditing(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [card.title, card.details]);
 
   const style = {
     transform: CSS.Transform.toString(transform),

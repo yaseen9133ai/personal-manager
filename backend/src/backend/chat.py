@@ -162,12 +162,16 @@ def apply_action(conn: sqlite3.Connection, user_id: int, action: BoardAction) ->
     elif action.type == "update_card":
         if not action.card_id:
             raise ValueError("update_card requires card_id")
+        # title can't be validly set to "" anyway (UpdateCardRequest requires
+        # min_length=1), so treat an empty string the same as the model not
+        # supplying one: no change. details has no such minimum, so an
+        # explicit "" there is a deliberate "clear the details" request.
         update_card(
             conn,
             user_id,
             action.card_id,
             UpdateCardRequest(
-                title=action.title or None,
+                title=action.title if action.title else None,
                 details=action.details,
                 column_id=action.target_column_id,
             ),
