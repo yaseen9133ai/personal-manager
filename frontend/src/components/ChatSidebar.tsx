@@ -54,7 +54,7 @@ export const ChatSidebar = ({ onSendMessage }: ChatSidebarProps) => {
     // continuous animation is what made dragging feel choppy specifically
     // while the sidebar was open (hiding it removed the only other blurred
     // panel on screen besides the header).
-    <aside className="flex w-full flex-col gap-4 rounded-[32px] border border-[var(--stroke)] bg-white/95 p-6 shadow-[var(--shadow)] lg:w-80">
+    <aside className="flex w-full flex-col gap-4 rounded-[32px] border border-[var(--stroke)] bg-[var(--surface-translucent)] p-6 shadow-[var(--shadow)] lg:w-80">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[var(--gray-text)]">
@@ -125,7 +125,7 @@ export const ChatSidebar = ({ onSendMessage }: ChatSidebarProps) => {
           placeholder="Ask the AI..."
           aria-label="Chat message"
           disabled={isSending}
-          className="flex-1 rounded-full border border-[var(--stroke)] bg-white px-4 py-2 text-sm text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)] disabled:opacity-60"
+          className="flex-1 rounded-full border border-[var(--stroke)] bg-[var(--surface-strong)] px-4 py-2 text-sm text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)] disabled:opacity-60"
         />
         <button
           type="submit"

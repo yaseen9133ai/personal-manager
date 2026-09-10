@@ -8,8 +8,21 @@
   --gray-text: #888888;
   --surface: #f7f8fb;
   --surface-strong: #ffffff;
+  --surface-translucent: rgba(255, 255, 255, 0.85);
   --stroke: rgba(3, 33, 71, 0.08);
   --shadow: 0 18px 40px rgba(3, 33, 71, 0.12);
+}
+
+/* Brand accents (yellow/blue/purple) stay fixed across themes per the
+   project's color-scheme decision -- only surface/text/stroke shift. */
+:root[data-theme="dark"] {
+  --navy-dark: #eef2f8;
+  --gray-text: #9aa7b8;
+  --surface: #0b1220;
+  --surface-strong: #141b2e;
+  --surface-translucent: rgba(20, 27, 46, 0.85);
+  --stroke: rgba(255, 255, 255, 0.1);
+  --shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
 }
 
 @theme inline {
@@ -27,6 +40,7 @@ body {
   color: var(--navy-dark);
   font-family: var(--font-body), "Segoe UI", sans-serif;
   margin: 0;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .font-display {

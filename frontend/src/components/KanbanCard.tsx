@@ -58,14 +58,14 @@ export const KanbanCard = ({ card, onDelete, onEdit }: KanbanCardProps) => {
       <article
         ref={setNodeRef}
         style={style}
-        className="rounded-2xl border border-[var(--primary-blue)] bg-white px-4 py-4 shadow-[0_12px_24px_rgba(3,33,71,0.08)]"
+        className="rounded-2xl border border-[var(--primary-blue)] bg-[var(--surface-strong)] px-4 py-4 shadow-[0_12px_24px_rgba(3,33,71,0.08)]"
         data-testid={`card-${card.id}`}
       >
         <div className="space-y-2">
           <input
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            className="w-full rounded-xl border border-[var(--stroke)] bg-white px-3 py-2 text-sm font-semibold text-[var(--navy-dark)] outline-none focus:border-[var(--primary-blue)]"
+            className="w-full rounded-xl border border-[var(--stroke)] bg-[var(--surface-strong)] px-3 py-2 text-sm font-semibold text-[var(--navy-dark)] outline-none focus:border-[var(--primary-blue)]"
             aria-label="Card title"
             autoFocus
           />
@@ -73,7 +73,7 @@ export const KanbanCard = ({ card, onDelete, onEdit }: KanbanCardProps) => {
             value={details}
             onChange={(event) => setDetails(event.target.value)}
             rows={3}
-            className="w-full resize-none rounded-xl border border-[var(--stroke)] bg-white px-3 py-2 text-sm text-[var(--gray-text)] outline-none focus:border-[var(--primary-blue)]"
+            className="w-full resize-none rounded-xl border border-[var(--stroke)] bg-[var(--surface-strong)] px-3 py-2 text-sm text-[var(--gray-text)] outline-none focus:border-[var(--primary-blue)]"
             aria-label="Card details"
           />
           <div className="flex items-center gap-2">
@@ -102,7 +102,7 @@ export const KanbanCard = ({ card, onDelete, onEdit }: KanbanCardProps) => {
       ref={setNodeRef}
       style={style}
       className={clsx(
-        "rounded-2xl border border-transparent bg-white px-4 py-4 shadow-[0_12px_24px_rgba(3,33,71,0.08)]",
+        "rounded-2xl border border-transparent bg-[var(--surface-strong)] px-4 py-4 shadow-[0_12px_24px_rgba(3,33,71,0.08)]",
         "transition-all duration-150",
         isDragging && "opacity-60 shadow-[0_18px_32px_rgba(3,33,71,0.16)]"
       )}

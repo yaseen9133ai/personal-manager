@@ -31,7 +31,7 @@ export const LoginForm = ({ onSuccess }: LoginFormProps) => {
     <main className="flex min-h-screen items-center justify-center px-6">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm rounded-[32px] border border-[var(--stroke)] bg-white/80 p-8 shadow-[var(--shadow)] backdrop-blur"
+        className="w-full max-w-sm rounded-[32px] border border-[var(--stroke)] bg-[var(--surface-translucent)] p-8 shadow-[var(--shadow)] backdrop-blur"
       >
         <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[var(--gray-text)]">
           Sign in
@@ -52,7 +52,7 @@ export const LoginForm = ({ onSuccess }: LoginFormProps) => {
               id="username"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
-              className="mt-1 w-full rounded-xl border border-[var(--stroke)] bg-white px-3 py-2 text-sm text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
+              className="mt-1 w-full rounded-xl border border-[var(--stroke)] bg-[var(--surface-strong)] px-3 py-2 text-sm text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
               autoComplete="username"
               required
             />
@@ -69,7 +69,7 @@ export const LoginForm = ({ onSuccess }: LoginFormProps) => {
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="mt-1 w-full rounded-xl border border-[var(--stroke)] bg-white px-3 py-2 text-sm text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
+              className="mt-1 w-full rounded-xl border border-[var(--stroke)] bg-[var(--surface-strong)] px-3 py-2 text-sm text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
               autoComplete="current-password"
               required
             />
